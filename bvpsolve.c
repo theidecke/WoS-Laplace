@@ -33,17 +33,30 @@ double uniform(pcg32_random_t* rng) {
     return uint64_to_double(rng->state);
 }
 
+void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
+    FILE* file = fopen(fn, "w+");
+    double maxvalue = 255.0;
+    fprintf(file, "P2\n%u %u\n%u\n", w, h, (uint32_t)maxvalue);
+    for (int row = 0; row < h; ++row) {
+        for (int column = 0; column < w; ++column) {
+            fprintf(file, "%u ", (uint32_t)(maxvalue * imagedata[w * row + column]));
+        }
+        fprintf(file, "\n");
+    }
+    fclose(file);
+}
+
 int main(int argc, char const *argv[])
 {
     pcg32_random_t rngstate = {42ULL, 0ULL};
     /* code */
-    printf("State: %" PRIu64 "\n", rngstate.state);
-    pcg32_random_r(&rngstate);
-    printf("State: %" PRIu64 "\n", rngstate.state);
-    pcg32_random_r(&rngstate);
-    printf("State: %" PRIu64 "\n", rngstate.state);
-    pcg32_random_r(&rngstate);
-    printf("State: %" PRIu64 "\n", rngstate.state);
+    //printf("State: %" PRIu64 "\n", rngstate.state);
+    //pcg32_random_r(&rngstate);
+    //printf("State: %" PRIu64 "\n", rngstate.state);
+    //pcg32_random_r(&rngstate);
+    //printf("State: %" PRIu64 "\n", rngstate.state);
+    //pcg32_random_r(&rngstate);
+    //printf("State: %" PRIu64 "\n", rngstate.state);
 
     printf("One = %f\n", uint64_to_double(0ULL));
     printf("One = %f\n", uint64_to_double(18446744073709551615ULL));
@@ -53,6 +66,11 @@ int main(int argc, char const *argv[])
     printf("uniform random double: %f\n", uniform(&rngstate));
     printf("uniform random double: %f\n", uniform(&rngstate));
     printf("uniform random double: %f\n", uniform(&rngstate));
+
+    double imagedata[3*3] = { 1.0, 0.0, 0.0,
+                               1.0, 1.0, 0.0,
+                               1.0, 1.0, 1.0 };
+    writeImageFile("test.pgm", imagedata, 3, 3);
 
     return 0;
 }
