@@ -1,11 +1,13 @@
 #include <inttypes.h>
 #include <stdio.h>
+#include <math.h>
+#include <float.h>
 
+// RANDOM NUMBER GENERATION /////////////////////////////////////////// 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
 // Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
 
 typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
-
 uint32_t pcg32_random_r(pcg32_random_t* rng)
 {
     uint64_t oldstate = rng->state;
@@ -33,6 +35,8 @@ double uniform(pcg32_random_t* rng) {
     return uint64_to_double(rng->state);
 }
 
+// IMAGE EXPORT ///////////////////////////////////////////////////////
+
 void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
     FILE* file = fopen(fn, "w+");
     double maxvalue = 255.0;
@@ -46,8 +50,70 @@ void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
     fclose(file);
 }
 
+// DEFINE ENVIRONMENT / BOUNDARY CONDITIONS ///////////////////////////
+
+#define NR_OF_CIRCLES 2
+
+struct point {
+    double x, y;
+};
+
+struct circle {
+    double center_x, center_y, radius, boundary_value_inside, boundary_value_outside;
+};
+
+void closestCirclePoint(struct point* retval, double* retbval, struct circle* c, double px, double py) {
+    double dx = px - c->center_x;
+    double dy = py - c->center_y;
+    double r_sq = dx * dx + dy * dy;
+    if (r_sq==0.0) // in case we are right in the center of the circle pick a direction
+    {
+        dx = 1.0;
+        dy = 0.0;
+        r_sq = 1.0;
+    }
+    double scale_to_radius = c->radius / sqrt(r_sq);
+    retval->x = c->center_x + scale_to_radius * dx;
+    retval->y = c->center_y + scale_to_radius * dy;
+    if (r_sq < c->radius * c->radius)
+    { // inside circle
+        *retbval = c->boundary_value_inside;
+    } else { // outside circle
+        *retbval = c->boundary_value_outside;
+    }
+
+}
+
+void closestBoundary(struct circle* circles, double* distance, double* boundary_value, double px, double py) {
+    struct point closest_point;
+    double closest_distance = DBL_MAX;
+    double ret_boundary_value = 0.0;
+
+    for (int i = 0; i < NR_OF_CIRCLES; ++i)
+    {
+        double current_distance;
+        double current_boundary_value;
+        closestCirclePoint(&closest_point, &current_boundary_value, &circles[i], px, py);
+        current_distance = sqrt( (closest_point.x-px)*(closest_point.x-px) + (closest_point.y-py)*(closest_point.y-py) );
+        if (current_distance < closest_distance)
+        {
+            closest_distance = current_distance;
+            ret_boundary_value = current_boundary_value;
+        }
+    }
+
+    *distance = closest_distance;
+    *boundary_value = ret_boundary_value;
+}
+
+// MAIN SIMULATION ////////////////////////////////////////////////////
+
 int main(int argc, char const *argv[])
 {
+    struct circle environment[NR_OF_CIRCLES] = {
+        {-1.0, -1.0, 1.0, 0.0, -1.0},
+        {1.0, 1.0, 1.0, 0.0, 1.0}
+    };
     pcg32_random_t rngstate = {42ULL, 0ULL};
     /* code */
     //printf("State: %" PRIu64 "\n", rngstate.state);
@@ -66,6 +132,16 @@ int main(int argc, char const *argv[])
     printf("uniform random double: %f\n", uniform(&rngstate));
     printf("uniform random double: %f\n", uniform(&rngstate));
     printf("uniform random double: %f\n", uniform(&rngstate));
+
+    struct point closest_point;
+    double closest_point_boundary_value;
+    closestCirclePoint(&closest_point, &closest_point_boundary_value, &environment[1], 10.0, 10.0);
+    printf("closest point: (%g, %g) with boundary value: %g\n", closest_point.x, closest_point.y, closest_point_boundary_value);
+
+    double closest_point_distance;
+    closestBoundary(environment, &closest_point_distance, &closest_point_boundary_value, 10.0, 10.0);
+    printf("closest point distance: %g\n", closest_point_distance);
+    printf("closest point boundary vale: %g\n", closest_point_boundary_value);
 
     double imagedata[3*3] = { 1.0, 0.0, 0.0,
                                1.0, 1.0, 0.0,
