@@ -48,7 +48,9 @@ void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
     fprintf(file, "P2\n%u %u\n%u\n", w, h, (uint32_t)maxvalue);
     for (int row = 0; row < h; ++row) {
         for (int column = 0; column < w; ++column) {
-            fprintf(file, "%u ", (uint32_t)(maxvalue * imagedata[w * row + column]));
+            double pixel_value = (maxvalue + 1.0) * imagedata[w * row + column]; // we scale by 256 but clamp to 255
+            if(pixel_value > maxvalue) pixel_value = maxvalue;
+            fprintf(file, "%u ", (uint32_t)(pixel_value));
         }
         fprintf(file, "\n");
     }
