@@ -108,6 +108,26 @@ void closestBoundary(struct circle* circles, double* distance, double* boundary_
 
 // MAIN SIMULATION ////////////////////////////////////////////////////
 
+#define MAX_WALK_LENGTH 128
+#define EPSILON 0.01
+
+double walkOnSpheres(pcg32_random_t* rng, struct circle* env, double sx, double sy) {
+    double boundary_distance, boundary_value;
+    double x = sx, y = sy;
+    int n = 0;
+    closestBoundary(env, &boundary_distance, &boundary_value, x, y);
+    while(boundary_distance > EPSILON && n < MAX_WALK_LENGTH) {
+        double phi = 2.0 * M_PI * uniform(rng); // choose a random angle
+        double nx, ny;
+        nx = x + boundary_distance * cos(phi);
+        ny = y + boundary_distance * sin(phi);
+        x = nx; y = ny;
+        ++n;
+        closestBoundary(env, &boundary_distance, &boundary_value, x, y);
+    }
+    return boundary_value;
+}
+
 int main(int argc, char const *argv[])
 {
     struct circle environment[NR_OF_CIRCLES] = {
@@ -142,6 +162,11 @@ int main(int argc, char const *argv[])
     closestBoundary(environment, &closest_point_distance, &closest_point_boundary_value, 10.0, 10.0);
     printf("closest point distance: %g\n", closest_point_distance);
     printf("closest point boundary vale: %g\n", closest_point_boundary_value);
+
+    for(int i = 0; i<16; ++i) {
+        double wosResult = walkOnSpheres(&rngstate, &environment, 0.0, 0.0);
+        printf("Walk on Spheres result: %g\n", wosResult);
+    }
 
     double imagedata[3*3] = { 1.0, 0.0, 0.0,
                                1.0, 1.0, 0.0,
