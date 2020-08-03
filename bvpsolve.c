@@ -3,6 +3,11 @@
 #include <math.h>
 #include <float.h>
 
+#define NR_OF_CIRCLES 4 // nr of circles that make up our boundary conditions
+#define MAX_WALK_LENGTH 128 // maximum nr of steps we try without hitting a boundary before stopping
+#define EPSILON 0.01 // distance we consider close enough to count as boundary hit
+#define RES 64 // simulation and image export resolution
+
 // RANDOM NUMBER GENERATION /////////////////////////////////////////// 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
 // Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
@@ -51,8 +56,6 @@ void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
 }
 
 // DEFINE ENVIRONMENT / BOUNDARY CONDITIONS ///////////////////////////
-
-#define NR_OF_CIRCLES 2
 
 struct point {
     double x, y;
@@ -108,9 +111,6 @@ void closestBoundary(struct circle* circles, double* distance, double* boundary_
 
 // MAIN SIMULATION ////////////////////////////////////////////////////
 
-#define MAX_WALK_LENGTH 128
-#define EPSILON 0.01
-
 double walkOnSpheres(pcg32_random_t* rng, struct circle* env, double sx, double sy) {
     double boundary_distance, boundary_value;
     double x = sx, y = sy;
@@ -138,51 +138,27 @@ double averageWalkOnSpheres(pcg32_random_t* rng, struct circle* env, int repetit
 
 int main(int argc, char const *argv[])
 {
-    struct circle environment[NR_OF_CIRCLES] = {
-        {-1.0, -1.0, 1.0, 0.0, -1.0},
-        {1.0, 1.0, 1.0, 0.0, 1.0}
-    };
     pcg32_random_t rngstate = {42ULL, 0ULL};
-    /* code */
-    //printf("State: %" PRIu64 "\n", rngstate.state);
-    //pcg32_random_r(&rngstate);
-    //printf("State: %" PRIu64 "\n", rngstate.state);
-    //pcg32_random_r(&rngstate);
-    //printf("State: %" PRIu64 "\n", rngstate.state);
-    //pcg32_random_r(&rngstate);
-    //printf("State: %" PRIu64 "\n", rngstate.state);
 
-    printf("One = %f\n", uint64_to_double(0ULL));
-    printf("One = %f\n", uint64_to_double(18446744073709551615ULL));
+    struct circle environment[NR_OF_CIRCLES] = {
+        {-1.0, -1.0, 1.0, 0.0, 0.0}, // x, y, radius, inside-bv, outside-bv
+        { 1.0, -1.0, 1.0, 1.0, 1.0},
+        { 1.0,  1.0, 1.0, 0.0, 0.0},
+        {-1.0,  1.0, 1.0, 1.0, 1.0}
+    };
 
-    printf("uniform random double: %f\n", uniform(&rngstate));
-    printf("uniform random double: %f\n", uniform(&rngstate));
-    printf("uniform random double: %f\n", uniform(&rngstate));
-    printf("uniform random double: %f\n", uniform(&rngstate));
-    printf("uniform random double: %f\n", uniform(&rngstate));
-
-    struct point closest_point;
-    double closest_point_boundary_value;
-    closestCirclePoint(&closest_point, &closest_point_boundary_value, &environment[1], 10.0, 10.0);
-    printf("closest point: (%g, %g) with boundary value: %g\n", closest_point.x, closest_point.y, closest_point_boundary_value);
-
-    double closest_point_distance;
-    closestBoundary(environment, &closest_point_distance, &closest_point_boundary_value, 10.0, 10.0);
-    printf("closest point distance: %g\n", closest_point_distance);
-    printf("closest point boundary vale: %g\n", closest_point_boundary_value);
-
-    for(int i = 0; i<16; ++i) {
-        double wosResult = walkOnSpheres(&rngstate, &environment, 0.2, 0.2);
-        printf("Walk on Spheres result: %g\n", wosResult);
+    double imagedata[RES*RES];
+    for (int j = 0; j < RES; ++j)
+    {
+        for (int i = 0; i < RES; ++i)
+        {
+            double sx = -4.0 + 8.0*((double)i+0.5)/(double)RES;
+            double sy =  4.0 - 8.0*((double)j+0.5)/(double)RES;
+            *(imagedata+RES*j+i) = averageWalkOnSpheres(&rngstate, &environment[0], 256, sx, sy);
+        }
     }
 
-    double wosResult = averageWalkOnSpheres(&rngstate, &environment, 1024, 0.2, 0.2);
-    printf("Repeated Walk on Spheres average result: %g\n", wosResult);
-
-    double imagedata[3*3] = { 1.0, 0.0, 0.0,
-                               1.0, 1.0, 0.0,
-                               1.0, 1.0, 1.0 };
-    writeImageFile("test.pgm", imagedata, 3, 3);
+    writeImageFile("test.pgm", imagedata, RES, RES);
 
     return 0;
 }
