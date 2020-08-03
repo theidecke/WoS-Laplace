@@ -5,7 +5,7 @@
 
 #define NR_OF_CIRCLES 4 // nr of circles that make up our boundary conditions
 #define MAX_WALK_LENGTH 128 // maximum nr of steps we try without hitting a boundary before stopping
-#define EPSILON 0.01 // distance we consider close enough to count as boundary hit
+#define EPSILON 0.01f // distance we consider close enough to count as boundary hit
 #define RES 64 // simulation and image export resolution
 
 // RANDOM NUMBER GENERATION /////////////////////////////////////////// 
@@ -24,25 +24,24 @@ uint32_t pcg32_random_r(pcg32_random_t* rng)
     return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 }
 
-union uint64_double_union {
-    uint64_t i;
-    double d;
+union uint32_float_union {
+    uint32_t i;
+    float f;
 };
 
-double uint64_to_double(uint64_t x) {
-    union uint64_double_union res;
-    res.i = 0x3ff0000000000000ULL + (x >> 12); // take first 52 bits of x as mantisse of our double value
-    return res.d - 1.0;
+float float_from_uint32(uint32_t x) {
+    union uint32_float_union res;
+    res.i = 0x3f800000 + (x >> 9); // take first 23 bits of x as mantisse of our float value
+    return res.f - 1.0f;
 }
 
-double uniform(pcg32_random_t* rng) {
-    pcg32_random_r(rng);
-    return uint64_to_double(rng->state);
+float uniform(pcg32_random_t* rng) {
+    return float_from_uint32(pcg32_random_r(rng));
 }
 
 // IMAGE EXPORT ///////////////////////////////////////////////////////
 
-void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
+void writeImageFile(char* fn, float* imagedata, uint32_t w, uint32_t h) {
     FILE* file = fopen(fn, "w+");
     double maxvalue = 255.0;
     fprintf(file, "P2\n%u %u\n%u\n", w, h, (uint32_t)maxvalue);
@@ -60,24 +59,24 @@ void writeImageFile(char* fn, double* imagedata, uint32_t w, uint32_t h) {
 // DEFINE ENVIRONMENT / BOUNDARY CONDITIONS ///////////////////////////
 
 struct point {
-    double x, y;
+    float x, y;
 };
 
 struct circle {
-    double center_x, center_y, radius, boundary_value_inside, boundary_value_outside;
+    float center_x, center_y, radius, boundary_value_inside, boundary_value_outside;
 };
 
-void closestCirclePoint(struct point* retval, double* retbval, struct circle* c, double px, double py) {
-    double dx = px - c->center_x;
-    double dy = py - c->center_y;
-    double r_sq = dx * dx + dy * dy;
-    if (r_sq==0.0) // in case we are right in the center of the circle pick a direction
+void closestCirclePoint(struct point* retval, float* retbval, struct circle* c, float px, float py) {
+    float dx = px - c->center_x;
+    float dy = py - c->center_y;
+    float r_sq = dx * dx + dy * dy;
+    if (r_sq==0.0f) // in case we are right in the center of the circle pick a direction
     {
-        dx = 1.0;
-        dy = 0.0;
-        r_sq = 1.0;
+        dx = 1.0f;
+        dy = 0.0f;
+        r_sq = 1.0f;
     }
-    double scale_to_radius = c->radius / sqrt(r_sq);
+    float scale_to_radius = c->radius / sqrtf(r_sq);
     retval->x = c->center_x + scale_to_radius * dx;
     retval->y = c->center_y + scale_to_radius * dy;
     if (r_sq < c->radius * c->radius)
@@ -89,17 +88,17 @@ void closestCirclePoint(struct point* retval, double* retbval, struct circle* c,
 
 }
 
-void closestBoundary(struct circle* circles, double* distance, double* boundary_value, double px, double py) {
+void closestBoundary(struct circle* circles, float* distance, float* boundary_value, float px, float py) {
     struct point closest_point;
-    double closest_distance = DBL_MAX;
-    double ret_boundary_value = 0.0;
+    float closest_distance = DBL_MAX;
+    float ret_boundary_value = 0.0f;
 
     for (int i = 0; i < NR_OF_CIRCLES; ++i)
     {
-        double current_distance;
-        double current_boundary_value;
+        float current_distance;
+        float current_boundary_value;
         closestCirclePoint(&closest_point, &current_boundary_value, &circles[i], px, py);
-        current_distance = sqrt( (closest_point.x-px)*(closest_point.x-px) + (closest_point.y-py)*(closest_point.y-py) );
+        current_distance = sqrtf( (closest_point.x-px)*(closest_point.x-px) + (closest_point.y-py)*(closest_point.y-py) );
         if (current_distance < closest_distance)
         {
             closest_distance = current_distance;
@@ -113,16 +112,16 @@ void closestBoundary(struct circle* circles, double* distance, double* boundary_
 
 // MAIN SIMULATION ////////////////////////////////////////////////////
 
-double walkOnSpheres(pcg32_random_t* rng, struct circle* env, double sx, double sy) {
-    double boundary_distance, boundary_value;
-    double x = sx, y = sy;
+float walkOnSpheres(pcg32_random_t* rng, struct circle* env, float sx, float sy) {
+    float boundary_distance, boundary_value;
+    float x = sx, y = sy;
     int n = 0;
     closestBoundary(env, &boundary_distance, &boundary_value, x, y);
     while(boundary_distance > EPSILON && n < MAX_WALK_LENGTH) {
-        double phi = 2.0 * M_PI * uniform(rng); // choose a random angle
-        double nx, ny;
-        nx = x + boundary_distance * cos(phi);
-        ny = y + boundary_distance * sin(phi);
+        float phi = 2.0f * M_PI * uniform(rng); // choose a random angle
+        float nx, ny;
+        nx = x + boundary_distance * cosf(phi);
+        ny = y + boundary_distance * sinf(phi);
         x = nx; y = ny;
         ++n;
         closestBoundary(env, &boundary_distance, &boundary_value, x, y);
@@ -130,8 +129,8 @@ double walkOnSpheres(pcg32_random_t* rng, struct circle* env, double sx, double 
     return boundary_value;
 }
 
-double averageWalkOnSpheres(pcg32_random_t* rng, struct circle* env, int repetitions, double sx, double sy) {
-    double wosSum = 0.0;
+float averageWalkOnSpheres(pcg32_random_t* rng, struct circle* env, int repetitions, float sx, float sy) {
+    float wosSum = 0.0f;
     for(int i = 0; i<repetitions; ++i) {
         wosSum += walkOnSpheres(rng, env, sx, sy);
     }
@@ -143,19 +142,19 @@ int main(int argc, char const *argv[])
     pcg32_random_t rngstate = {42ULL, 0ULL};
 
     struct circle environment[NR_OF_CIRCLES] = {
-        {-1.0, -1.0, 1.0, 0.0, 0.0}, // x, y, radius, inside-bv, outside-bv
-        { 1.0, -1.0, 1.0, 1.0, 1.0},
-        { 1.0,  1.0, 1.0, 0.0, 0.0},
-        {-1.0,  1.0, 1.0, 1.0, 1.0}
+        {-1.0f, -1.0f, 1.0f, 0.0f, 0.0f}, // x, y, radius, inside-bv, outside-bv
+        { 1.0f, -1.0f, 1.0f, 1.0f, 1.0f},
+        { 1.0f,  1.0f, 1.0f, 0.0f, 0.0f},
+        {-1.0f,  1.0f, 1.0f, 1.0f, 1.0f}
     };
 
-    double imagedata[RES*RES];
+    float imagedata[RES*RES];
     for (int j = 0; j < RES; ++j)
     {
         for (int i = 0; i < RES; ++i)
         {
-            double sx = -4.0 + 8.0*((double)i+0.5)/(double)RES;
-            double sy =  4.0 - 8.0*((double)j+0.5)/(double)RES;
+            float sx = -4.0f + 8.0f*((float)i+0.5f)/(float)RES;
+            float sy =  4.0f - 8.0f*((float)j+0.5f)/(float)RES;
             *(imagedata+RES*j+i) = averageWalkOnSpheres(&rngstate, &environment[0], 256, sx, sy);
         }
     }
