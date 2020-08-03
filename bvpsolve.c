@@ -128,6 +128,14 @@ double walkOnSpheres(pcg32_random_t* rng, struct circle* env, double sx, double 
     return boundary_value;
 }
 
+double averageWalkOnSpheres(pcg32_random_t* rng, struct circle* env, int repetitions, double sx, double sy) {
+    double wosSum = 0.0;
+    for(int i = 0; i<repetitions; ++i) {
+        wosSum += walkOnSpheres(rng, env, sx, sy);
+    }
+    return wosSum / repetitions;
+}
+
 int main(int argc, char const *argv[])
 {
     struct circle environment[NR_OF_CIRCLES] = {
@@ -164,9 +172,12 @@ int main(int argc, char const *argv[])
     printf("closest point boundary vale: %g\n", closest_point_boundary_value);
 
     for(int i = 0; i<16; ++i) {
-        double wosResult = walkOnSpheres(&rngstate, &environment, 0.0, 0.0);
+        double wosResult = walkOnSpheres(&rngstate, &environment, 0.2, 0.2);
         printf("Walk on Spheres result: %g\n", wosResult);
     }
+
+    double wosResult = averageWalkOnSpheres(&rngstate, &environment, 1024, 0.2, 0.2);
+    printf("Repeated Walk on Spheres average result: %g\n", wosResult);
 
     double imagedata[3*3] = { 1.0, 0.0, 0.0,
                                1.0, 1.0, 0.0,
