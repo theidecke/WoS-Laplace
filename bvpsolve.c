@@ -7,6 +7,7 @@
 #define MAX_WALK_LENGTH 128 // maximum nr of steps we try without hitting a boundary before stopping
 #define EPSILON 0.01f // distance we consider close enough to count as boundary hit
 #define RES 64 // simulation and image export resolution
+#define SPP 256 // number of WoS runs (samples) per pixel
 
 // RANDOM NUMBER GENERATION /////////////////////////////////////////// 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
@@ -155,7 +156,7 @@ int main(int argc, char const *argv[])
         {
             float sx = -4.0f + 8.0f*((float)i+0.5f)/(float)RES;
             float sy =  4.0f - 8.0f*((float)j+0.5f)/(float)RES;
-            *(imagedata+RES*j+i) = averageWalkOnSpheres(&rngstate, &environment[0], 256, sx, sy);
+            *(imagedata+RES*j+i) = averageWalkOnSpheres(&rngstate, &environment[0], SPP, sx, sy);
         }
     }
 
