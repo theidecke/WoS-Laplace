@@ -3,11 +3,13 @@
 #include <math.h>
 #include <float.h>
 
-#define NR_OF_CIRCLES 4 // nr of circles that make up our boundary conditions
-#define MAX_WALK_LENGTH 128 // maximum nr of steps we try without hitting a boundary before stopping
-#define EPSILON 0.01f // distance we consider close enough to count as boundary hit
-#define RES 64 // simulation and image export resolution
-#define SPP 256 // number of WoS runs (samples) per pixel
+#define NR_OF_CIRCLES 50 // nr of circles that make up our boundary conditions
+#define MAX_WALK_LENGTH 256 // maximum nr of steps we try without hitting a boundary before stopping
+#define EPSILON (1.0f/1024.0f) // distance we consider close enough to count as boundary hit
+#define RES 256 // simulation and image export resolution
+#define SPP 64 // number of WoS runs (samples) per pixel
+#define JITTER 1.0f // random starting positions for different WoSs inside the same pixel
+#define RANDOM_CIRCLES 0 // generate random boundary conditions
 
 // RANDOM NUMBER GENERATION /////////////////////////////////////////// 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
@@ -44,12 +46,12 @@ float uniform(pcg32_random_t* rng) {
 
 void writeImageFile(char* fn, float* imagedata, uint32_t w, uint32_t h) {
     FILE* file = fopen(fn, "w+");
-    double maxvalue = 255.0;
+    float maxvalue = 255.0;
     fprintf(file, "P2\n%u %u\n%u\n", w, h, (uint32_t)maxvalue);
     for (int row = 0; row < h; ++row) {
         for (int column = 0; column < w; ++column) {
-            double pixel_value = (maxvalue + 1.0) * imagedata[w * row + column]; // we scale by 256 but clamp to 255
-            if(pixel_value > maxvalue) pixel_value = maxvalue;
+            float pixel_value = (maxvalue + 1.0) * imagedata[w * row + column]; // we scale by 256 but clamp to 255
+            if(pixel_value > maxvalue) pixel_value = maxvalue; if(pixel_value < 0.0f) pixel_value = 0.0f;
             fprintf(file, "%u ", (uint32_t)(pixel_value));
         }
         fprintf(file, "\n");
@@ -133,7 +135,9 @@ float walkOnSpheres(pcg32_random_t* rng, struct circle* env, float sx, float sy)
 float averageWalkOnSpheres(pcg32_random_t* rng, struct circle* env, int repetitions, float sx, float sy) {
     float wosSum = 0.0f;
     for(int i = 0; i<repetitions; ++i) {
-        wosSum += walkOnSpheres(rng, env, sx, sy);
+        float x = sx + (JITTER / (float)RES) * (uniform(rng) - 0.5f);
+        float y = sy + (JITTER / (float)RES) * (uniform(rng) - 0.5f);
+        wosSum += walkOnSpheres(rng, env, x, y);
     }
     return wosSum / repetitions;
 }
@@ -142,20 +146,37 @@ int main(int argc, char const *argv[])
 {
     pcg32_random_t rngstate = {42ULL, 0ULL};
 
-    struct circle environment[NR_OF_CIRCLES] = {
-        {-1.0f, -1.0f, 1.0f, 0.0f, 0.0f}, // x, y, radius, inside-bv, outside-bv
-        { 1.0f, -1.0f, 1.0f, 1.0f, 1.0f},
-        { 1.0f,  1.0f, 1.0f, 0.0f, 0.0f},
-        {-1.0f,  1.0f, 1.0f, 1.0f, 1.0f}
-    };
+#if (RANDOM_CIRCLES > 0)
+    // generate random boundary conditions
+    struct circle environment[NR_OF_CIRCLES];
 
+    for (int i = 0; i < NR_OF_CIRCLES; ++i)
+    {
+        environment[i].center_x = uniform(&rngstate);
+        environment[i].center_y = uniform(&rngstate);
+        environment[i].radius = 0.2f * powf(uniform(&rngstate), 4);
+        environment[i].boundary_value_inside = uniform(&rngstate);
+        environment[i].boundary_value_outside = uniform(&rngstate);
+    }
+#else
+    struct circle environment[NR_OF_CIRCLES] = {
+        {0.5f ,0.5f , 0.38f , 0.0f, 1.0f}, // x, y, radius, inside-bv, outside-bv
+        {0.5f, 0.5f, 0.1f, 1.0f, 1.0f},
+        {0.25f,0.75f, 0.23f, 0.5f, 0.0f},
+        {0.75f,0.25f, 0.23f, 0.5f, 0.0f},
+        {0.25f,0.25f, 0.23f, 0.5f, 0.0f},
+        {0.75f,0.75f, 0.23f, 0.5f, 0.0f}
+    };
+#endif
+
+    // compute pixel values
     float imagedata[RES*RES];
     for (int j = 0; j < RES; ++j)
     {
         for (int i = 0; i < RES; ++i)
         {
-            float sx = -4.0f + 8.0f*((float)i+0.5f)/(float)RES;
-            float sy =  4.0f - 8.0f*((float)j+0.5f)/(float)RES;
+            float sx = 0.0f + ((float)i+0.5f)/(float)RES;
+            float sy = 1.0f - ((float)j+0.5f)/(float)RES;
             *(imagedata+RES*j+i) = averageWalkOnSpheres(&rngstate, &environment[0], SPP, sx, sy);
         }
     }
